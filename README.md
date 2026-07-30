@@ -108,6 +108,6 @@ GitHub Pages поднимет сайт из ветки `gh-pages`.
 - UI калькулятора: [src/features/mortgage/MortgageCalculator.tsx](src/features/mortgage/MortgageCalculator.tsx)
 - Формулы/расчёты: [src/features/mortgage/calc.ts](src/features/mortgage/calc.ts)
 - График (SVG): [src/features/mortgage/PaymentChart.tsx](src/features/mortgage/PaymentChart.tsx)
-- Форматирование ₽: [src/features/mortgage/format.ts](src/features/mortgage/format.ts)
+- Форматирование: [src/features/mortgage/format.ts](src/features/mortgage/format.ts)
 - Точка входа: [src/main.tsx](src/main.tsx)
 
