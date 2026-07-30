@@ -93,12 +93,12 @@ GitHub Pages поднимет сайт из ветки `gh-pages`.
 
 - Ввод параметров: стоимость жилья, первоначальный взнос, ставка, срок, тип платежа
 - Расчёт:
-  - первоначального взноса (в ₽) и тела кредита (S)
+  - первоначального взноса и тела кредита (S)
   - аннуитетного платежа (фиксированный ежемесячный)
   - дифференцированного платежа (уменьшается по месяцам) + таблица
   - общей суммы выплат и переплаты по процентам
 - График платежей/остатка долга по месяцам
-- Валидация ввода и форматирование сумм в ₽
+- Валидация ввода и форматирование сумм
 - Досрочное погашение:
   - «уменьшение срока»: сравнение «Было / Стало», новый срок и экономия на процентах, график остатка долга
   - «уменьшение платежа»: сравнение «Было / Стало», платёж по месяцам и экономия на процентах
@@ -111,15 +111,3 @@ GitHub Pages поднимет сайт из ветки `gh-pages`.
 - Форматирование ₽: [src/features/mortgage/format.ts](src/features/mortgage/format.ts)
 - Точка входа: [src/main.tsx](src/main.tsx)
 
-## ТЗ
-
-- v1: [mortgage-calculator-prompt.md](mortgage-calculator-prompt.md)
-- v2: [mortgage-calculator-prompt-v2.md](mortgage-calculator-prompt-v2.md)
-- v3: [mortgage-calculator-prompt-v3.md](mortgage-calculator-prompt-v3.md)
-- v4: [mortgage-calculator-prompt-v4.md](mortgage-calculator-prompt-v4.md)
-- v5: [mortgage-calculator-prompt-v5.md](mortgage-calculator-prompt-v5.md)
-- v6: [mortgage-calculator-prompt-v6.md](mortgage-calculator-prompt-v6.md)
-- v7: [mortgage-calculator-prompt-v7.md](mortgage-calculator-prompt-v7.md)
-- v8: [mortgage-calculator-prompt-v8.md](mortgage-calculator-prompt-v8.md)
-- v9: [mortgage-calculator-prompt-v9.md](mortgage-calculator-prompt-v9.md)
-- v10: [mortgage-calculator-prompt-v10.md](mortgage-calculator-prompt-v10.md)
