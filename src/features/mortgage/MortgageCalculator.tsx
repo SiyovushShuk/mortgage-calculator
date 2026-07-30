@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import PaymentChart from './PaymentChart'
 import {
+  calcAnnuitySchedule,
   calcAnnuityMonthlyPayment,
-  calcAnnuityTotals,
   calcDifferentiatedSchedule,
   calcDownPaymentAmountFromInput,
   calcDownPaymentPercentFromAmount,
@@ -14,8 +14,7 @@ import {
   PaymentType,
   simulateEarlyRepaymentAnnuity,
   simulateEarlyRepaymentDifferentiated,
-  simulatePayReductionAnnuity,
-  simulatePayReductionDifferentiated,
+  simulatePayReduction,
   TermUnit,
   toMonths,
 } from './calc'
@@ -306,7 +305,7 @@ export default function MortgageCalculator() {
         months: 0,
         downPaymentAmount: 0,
         principal: 0,
-        annuity: { monthlyPayment: 0, totalPayment: 0, overpayment: 0 },
+        annuity: { monthlyPayment: 0, schedule: [], totalPayment: 0, overpayment: 0 },
         differentiated: { schedule: [], totalPayment: 0, overpayment: 0 },
       }
     }
@@ -325,11 +324,17 @@ export default function MortgageCalculator() {
     )
 
     if (calcInput.paymentType === 'annuity') {
+      const monthlyPayment = calcAnnuityMonthlyPayment(
+        principal,
+        calcInput.annualRatePercent,
+        months,
+      )
+      const annuity = calcAnnuitySchedule(principal, calcInput.annualRatePercent, months)
       return {
         months,
         downPaymentAmount,
         principal,
-        annuity: calcAnnuityTotals(principal, calcInput.annualRatePercent, months),
+        annuity: { monthlyPayment, ...annuity },
         differentiated: { schedule: [], totalPayment: 0, overpayment: 0 },
       }
     }
@@ -338,7 +343,7 @@ export default function MortgageCalculator() {
       months,
       downPaymentAmount,
       principal,
-      annuity: { monthlyPayment: 0, totalPayment: 0, overpayment: 0 },
+      annuity: { monthlyPayment: 0, schedule: [], totalPayment: 0, overpayment: 0 },
       differentiated: calcDifferentiatedSchedule(
         principal,
         calcInput.annualRatePercent,
@@ -355,10 +360,7 @@ export default function MortgageCalculator() {
       return [
         {
           label: 'Аннуитет',
-          values: Array.from(
-            { length: calculated.months },
-            () => calculated.annuity.monthlyPayment,
-          ),
+          values: calculated.annuity.schedule.map((r) => r.payment),
           color: '#7dd3fc',
         },
       ]
@@ -791,10 +793,13 @@ export default function MortgageCalculator() {
             )}
           </section>
 
-          {calcInput?.paymentType === 'differentiated' && (
+          {calcInput && (
             <section className="panel">
               <div className="panelTitle">График платежей (таблица)</div>
-              {calculated.differentiated.schedule.length === 0 ? (
+              {(calcInput.paymentType === 'annuity'
+                ? calculated.annuity.schedule
+                : calculated.differentiated.schedule
+              ).length === 0 ? (
                 <div className="emptyState">Нет данных для построения таблицы.</div>
               ) : (
                 <div className="tableWrap" role="region" aria-label="График платежей">
@@ -810,7 +815,10 @@ export default function MortgageCalculator() {
                       </tr>
                     </thead>
                     <tbody>
-                      {calculated.differentiated.schedule.map((row) => (
+                      {(calcInput.paymentType === 'annuity'
+                        ? calculated.annuity.schedule
+                        : calculated.differentiated.schedule
+                      ).map((row) => (
                         <tr key={row.month}>
                           <td>{row.month}</td>
                           <td>{formatCur(row.payment)}</td>
@@ -1331,29 +1339,15 @@ function PrepaymentPayTab({
       downPaymentAmount,
     )
 
-    if (calcInput.paymentType === 'annuity') {
-      const base = simulatePayReductionAnnuity(
-        principal,
-        calcInput.annualRatePercent,
-        months,
-        0,
-      )
-      const withExtra = simulatePayReductionAnnuity(
-        principal,
-        calcInput.annualRatePercent,
-        months,
-        calcInput.extraPayment,
-      )
-      return { months, principal, base, withExtra }
-    }
-
-    const base = simulatePayReductionDifferentiated(
+    const base = simulatePayReduction(
+      calcInput.paymentType,
       principal,
       calcInput.annualRatePercent,
       months,
       0,
     )
-    const withExtra = simulatePayReductionDifferentiated(
+    const withExtra = simulatePayReduction(
+      calcInput.paymentType,
       principal,
       calcInput.annualRatePercent,
       months,
@@ -1405,8 +1399,8 @@ function PrepaymentPayTab({
       <section className="panel">
         <div className="panelTitle">Досрочное погашение с уменьшением платежа</div>
         <div className="infoNote">
-          Срок кредита остаётся прежним, но за счёт дополнительной суммы ежемесячный
-          платёж будет постепенно уменьшаться.
+          Ежемесячный платёж будет постепенно уменьшаться. При достаточно большой доплате
+          кредит может закрыться раньше исходного срока — это нормальный результат.
         </div>
 
         <div className="prepayTopGrid">
@@ -1494,7 +1488,7 @@ function PrepaymentPayTab({
                 {
                   label: 'Срок кредита',
                   base: `${computed.months} мес`,
-                  changed: `${computed.months} мес`,
+                  changed: `${computed.withExtra.schedule.length} мес`,
                 },
                 {
                   label: 'Ежемесячный платёж',

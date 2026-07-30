@@ -111,6 +111,50 @@ export function calcAnnuityTotals(
   return { monthlyPayment, totalPayment, overpayment }
 }
 
+export function calcAnnuitySchedule(
+  principal: number,
+  annualRatePercent: number,
+  months: number,
+): { schedule: DifferentiatedRow[]; totalPayment: number; overpayment: number } {
+  if (!Number.isFinite(principal) || principal <= 0) {
+    return { schedule: [], totalPayment: 0, overpayment: 0 }
+  }
+  if (!Number.isFinite(months) || months <= 0) {
+    return { schedule: [], totalPayment: 0, overpayment: 0 }
+  }
+
+  const i = calcMonthlyRate(annualRatePercent)
+  const monthlyPayment = calcAnnuityMonthlyPayment(principal, annualRatePercent, months)
+
+  const schedule: DifferentiatedRow[] = []
+  let totalPayment = 0
+  let balance = principal
+
+  for (let month = 1; month <= months; month += 1) {
+    const balanceBefore = balance
+    const interestPart = balanceBefore * i
+    const principalRaw = Math.max(0, monthlyPayment - interestPart)
+    const principalPart = Math.min(principalRaw, balanceBefore)
+    const payment = principalPart + interestPart
+    const balanceAfter = Math.max(0, balanceBefore - principalPart)
+
+    schedule.push({
+      month,
+      payment,
+      principalPart,
+      interestPart,
+      balanceBefore,
+      balanceAfter,
+    })
+
+    totalPayment += payment
+    balance = balanceAfter
+  }
+
+  const overpayment = totalPayment - principal
+  return { schedule, totalPayment, overpayment }
+}
+
 export function calcDifferentiatedSchedule(
   principal: number,
   annualRatePercent: number,
@@ -149,6 +193,70 @@ export function calcDifferentiatedSchedule(
 
   const overpayment = totalPayment - principal
   return { schedule, totalPayment, overpayment }
+}
+
+export function simulatePayReduction(
+  paymentType: PaymentType,
+  principal: number,
+  annualRatePercent: number,
+  months: number,
+  extraPayment: number,
+): {
+  schedule: EarlyRepaymentRow[]
+  totalPayment: number
+  totalInterest: number
+} {
+  if (!Number.isFinite(principal) || principal <= 0) {
+    return { schedule: [], totalPayment: 0, totalInterest: 0 }
+  }
+  if (!Number.isFinite(months) || months <= 0) {
+    return { schedule: [], totalPayment: 0, totalInterest: 0 }
+  }
+
+  const i = calcMonthlyRate(annualRatePercent)
+  const safeExtra = Number.isFinite(extraPayment) && extraPayment > 0 ? extraPayment : 0
+
+  let balance = principal
+  let totalPayment = 0
+  let totalInterest = 0
+  const schedule: EarlyRepaymentRow[] = []
+
+  for (let month = 1; month <= months; month += 1) {
+    const monthsLeft = months - month + 1
+
+    if (balance <= 0) break
+
+    const interestPart = balance * i
+    const principalPartRaw =
+      paymentType === 'annuity'
+        ? Math.max(
+            0,
+            calcAnnuityMonthlyPayment(balance, annualRatePercent, monthsLeft) - interestPart,
+          )
+        : balance / monthsLeft
+    const principalPart = Math.min(principalPartRaw, balance)
+    const payment = principalPart + interestPart
+    const extraPaymentPart = Math.max(
+      0,
+      Math.min(safeExtra, Math.max(0, balance - principalPart)),
+    )
+
+    balance = Math.max(0, balance - principalPart - extraPaymentPart)
+
+    schedule.push({
+      month,
+      payment,
+      interestPart,
+      principalPart,
+      extraPaymentPart,
+      balanceAfter: balance,
+    })
+
+    totalPayment += payment + extraPaymentPart
+    totalInterest += interestPart
+  }
+
+  return { schedule, totalPayment, totalInterest }
 }
 
 export function simulateEarlyRepaymentAnnuity(
@@ -330,68 +438,7 @@ export function simulatePayReductionAnnuity(
   totalPayment: number
   totalInterest: number
 } {
-  if (!Number.isFinite(principal) || principal <= 0) {
-    return { schedule: [], totalPayment: 0, totalInterest: 0 }
-  }
-  if (!Number.isFinite(months) || months <= 0) {
-    return { schedule: [], totalPayment: 0, totalInterest: 0 }
-  }
-
-  const i = calcMonthlyRate(annualRatePercent)
-  const safeExtra = Number.isFinite(extraPayment) && extraPayment > 0 ? extraPayment : 0
-
-  let balance = principal
-  let totalPayment = 0
-  let totalInterest = 0
-  const schedule: EarlyRepaymentRow[] = []
-
-  for (let month = 1; month <= months; month += 1) {
-    const monthsLeft = months - month + 1
-
-    if (balance <= 0) {
-      schedule.push({
-        month,
-        payment: 0,
-        interestPart: 0,
-        principalPart: 0,
-        extraPaymentPart: 0,
-        balanceAfter: 0,
-      })
-      continue
-    }
-
-    const theoreticalPayment = calcAnnuityMonthlyPayment(
-      balance,
-      annualRatePercent,
-      monthsLeft,
-    )
-    const interestPart = balance * i
-    const principalPart = Math.min(
-      Math.max(0, theoreticalPayment - interestPart),
-      balance,
-    )
-    const payment = principalPart + interestPart
-    const extraPaymentPart = Math.max(
-      0,
-      Math.min(safeExtra, Math.max(0, balance - principalPart)),
-    )
-
-    balance = Math.max(0, balance - principalPart - extraPaymentPart)
-
-    schedule.push({
-      month,
-      payment,
-      interestPart,
-      principalPart,
-      extraPaymentPart,
-      balanceAfter: balance,
-    })
-
-    totalPayment += payment + extraPaymentPart
-    totalInterest += interestPart
-  }
-
-  return { schedule, totalPayment, totalInterest }
+  return simulatePayReduction('annuity', principal, annualRatePercent, months, extraPayment)
 }
 
 export function simulatePayReductionDifferentiated(
@@ -404,60 +451,13 @@ export function simulatePayReductionDifferentiated(
   totalPayment: number
   totalInterest: number
 } {
-  if (!Number.isFinite(principal) || principal <= 0) {
-    return { schedule: [], totalPayment: 0, totalInterest: 0 }
-  }
-  if (!Number.isFinite(months) || months <= 0) {
-    return { schedule: [], totalPayment: 0, totalInterest: 0 }
-  }
-
-  const i = calcMonthlyRate(annualRatePercent)
-  const safeExtra = Number.isFinite(extraPayment) && extraPayment > 0 ? extraPayment : 0
-
-  let balance = principal
-  let totalPayment = 0
-  let totalInterest = 0
-  const schedule: EarlyRepaymentRow[] = []
-
-  for (let month = 1; month <= months; month += 1) {
-    const monthsLeft = months - month + 1
-
-    if (balance <= 0) {
-      schedule.push({
-        month,
-        payment: 0,
-        interestPart: 0,
-        principalPart: 0,
-        extraPaymentPart: 0,
-        balanceAfter: 0,
-      })
-      continue
-    }
-
-    const principalPart = Math.min(balance / monthsLeft, balance)
-    const interestPart = balance * i
-    const payment = principalPart + interestPart
-    const extraPaymentPart = Math.max(
-      0,
-      Math.min(safeExtra, Math.max(0, balance - principalPart)),
-    )
-
-    balance = Math.max(0, balance - principalPart - extraPaymentPart)
-
-    schedule.push({
-      month,
-      payment,
-      interestPart,
-      principalPart,
-      extraPaymentPart,
-      balanceAfter: balance,
-    })
-
-    totalPayment += payment + extraPaymentPart
-    totalInterest += interestPart
-  }
-
-  return { schedule, totalPayment, totalInterest }
+  return simulatePayReduction(
+    'differentiated',
+    principal,
+    annualRatePercent,
+    months,
+    extraPayment,
+  )
 }
 
 export function downsampleSeries(
