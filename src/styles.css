@@ -114,6 +114,115 @@ body {
   margin-bottom: 12px;
 }
 
+.helpPanel {
+  padding: 12px;
+}
+
+.helpRootSummary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(2, 6, 23, 0.55);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.helpRootSummary::marker,
+.helpItemSummary::marker {
+  content: '';
+}
+
+.helpRootSummary::-webkit-details-marker,
+.helpItemSummary::-webkit-details-marker {
+  display: none;
+}
+
+.helpRootSummary::after {
+  content: '▾';
+  opacity: 0.75;
+}
+
+.helpRoot[open] > .helpRootSummary::after {
+  content: '▴';
+}
+
+.helpRootBody {
+  padding: 12px 6px 4px;
+  display: grid;
+  gap: 10px;
+}
+
+.helpIntro {
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.45;
+}
+
+.helpList {
+  display: grid;
+  gap: 10px;
+}
+
+.helpItem {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.helpItemSummary {
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+}
+
+.helpItemSummary::after {
+  content: '▸';
+  opacity: 0.75;
+}
+
+.helpItem[open] > .helpItemSummary::after {
+  content: '▾';
+}
+
+.helpItemBody {
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.helpBullets {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.helpText {
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.45;
+}
+
+.katexBlock {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 6px 0;
+}
+
+.helpPanel .katex {
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -256,6 +365,11 @@ body {
   grid-template-columns: 1.2fr 0.8fr;
   gap: 12px;
   align-items: start;
+}
+
+.prepayLeft {
+  display: grid;
+  gap: 12px;
 }
 
 .prepayBase {
@@ -460,6 +574,12 @@ body {
   margin: 4px 0 6px;
 }
 
+.paymentIncomeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .primaryPaymentLabel {
   font-size: 12px;
   opacity: 0.82;
@@ -472,6 +592,12 @@ body {
   color: rgba(125, 211, 252, 0.95);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+.primaryPaymentSub {
+  font-size: 12px;
+  opacity: 0.72;
+  overflow-wrap: break-word;
 }
 
 .resultRow {
@@ -712,6 +838,10 @@ body {
 
   .segmented.segmentedPaymentType {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .paymentIncomeGrid {
     grid-template-columns: 1fr;
   }
 

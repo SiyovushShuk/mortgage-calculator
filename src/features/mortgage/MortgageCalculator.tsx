@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent, type RefObject } from 'react'
+import FormulasHelp from './FormulasHelp'
 import PaymentChart from './PaymentChart'
 import {
   calcAnnuitySchedule,
@@ -89,11 +90,23 @@ function formatTermMonths(totalMonths: number): string {
   return parts.join(' ')
 }
 
+function calcRequiredIncome(
+  payment: number,
+  otherPayments: number,
+  pdnThresholdPercent: number,
+): number {
+  if (!Number.isFinite(payment) || payment < 0) return Number.NaN
+  if (!Number.isFinite(otherPayments) || otherPayments < 0) return Number.NaN
+  if (!Number.isFinite(pdnThresholdPercent) || pdnThresholdPercent <= 0) return Number.NaN
+  return (payment + otherPayments) / (pdnThresholdPercent / 100)
+}
+
 export default function MortgageCalculator() {
   const { currencySymbol, setCurrencySymbol } = useCurrency()
 
   const propertyPriceRef = useRef<HTMLInputElement>(null)
   const downPaymentAmountRef = useRef<HTMLInputElement>(null)
+  const otherMonthlyPaymentsRef = useRef<HTMLInputElement>(null)
   const extraPaymentTermRef = useRef<HTMLInputElement>(null)
   const extraPaymentPayRef = useRef<HTMLInputElement>(null)
 
@@ -105,6 +118,9 @@ export default function MortgageCalculator() {
   const [downPaymentAmountDigits, setDownPaymentAmountDigits] = useState('4000000')
   const [annualRatePercent, setAnnualRatePercent] = useState(12)
   const [annualRateText, setAnnualRateText] = useState('12')
+  const [pdnThresholdPercent, setPdnThresholdPercent] = useState(50)
+  const [pdnThresholdText, setPdnThresholdText] = useState('50')
+  const [otherMonthlyPaymentsDigits, setOtherMonthlyPaymentsDigits] = useState('0')
   const [termValue, setTermValue] = useState(20)
   const [termUnit, setTermUnit] = useState<TermUnit>('years')
   const [paymentType, setPaymentType] = useState<PaymentType>('annuity')
@@ -117,6 +133,8 @@ export default function MortgageCalculator() {
     downPaymentMode: DownPaymentMode
     downPaymentValue: number
     annualRatePercent: number
+    pdnThresholdPercent: number
+    otherMonthlyPayments: number
     termValue: number
     termUnit: TermUnit
     paymentType: PaymentType
@@ -128,6 +146,8 @@ export default function MortgageCalculator() {
     downPaymentMode: DownPaymentMode
     downPaymentValue: number
     annualRatePercent: number
+    pdnThresholdPercent: number
+    otherMonthlyPayments: number
     termValue: number
     termUnit: TermUnit
     paymentType: PaymentType
@@ -140,6 +160,8 @@ export default function MortgageCalculator() {
     downPaymentMode: DownPaymentMode
     downPaymentValue: number
     annualRatePercent: number
+    pdnThresholdPercent: number
+    otherMonthlyPayments: number
     termValue: number
     termUnit: TermUnit
     paymentType: PaymentType
@@ -148,6 +170,11 @@ export default function MortgageCalculator() {
   const [isPrepayPayDirty, setIsPrepayPayDirty] = useState(false)
 
   const months = useMemo(() => toMonths(termValue, termUnit), [termValue, termUnit])
+  const otherMonthlyPayments = useMemo(() => {
+    if (otherMonthlyPaymentsDigits === '') return 0
+    const num = Number(otherMonthlyPaymentsDigits)
+    return Number.isFinite(num) && num >= 0 ? num : 0
+  }, [otherMonthlyPaymentsDigits])
   const extraPaymentTerm = useMemo(() => {
     if (extraPaymentTermDigits === '') return 0
     const num = Number(extraPaymentTermDigits)
@@ -221,11 +248,15 @@ export default function MortgageCalculator() {
       propertyPrice: FieldError
       downPayment: FieldError
       annualRatePercent: FieldError
+      pdnThresholdPercent: FieldError
+      otherMonthlyPayments: FieldError
       termValue: FieldError
     } = {
       propertyPrice: null,
       downPayment: null,
       annualRatePercent: null,
+      pdnThresholdPercent: null,
+      otherMonthlyPayments: null,
       termValue: null,
     }
 
@@ -259,6 +290,16 @@ export default function MortgageCalculator() {
       result.annualRatePercent = 'Разумные границы: до 50%'
     }
 
+    if (!Number.isFinite(pdnThresholdPercent) || pdnThresholdPercent <= 0) {
+      result.pdnThresholdPercent = 'Введите порог'
+    } else if (pdnThresholdPercent < 1 || pdnThresholdPercent > 100) {
+      result.pdnThresholdPercent = 'Должно быть от 1 до 100%'
+    }
+
+    if (!Number.isFinite(otherMonthlyPayments) || otherMonthlyPayments < 0) {
+      result.otherMonthlyPayments = 'Введите неотрицательную сумму'
+    }
+
     if (!Number.isFinite(termValue) || termValue <= 0) {
       result.termValue = 'Срок должен быть больше 0'
     } else if (!Number.isInteger(termValue)) {
@@ -274,6 +315,8 @@ export default function MortgageCalculator() {
     annualRatePercent,
     downPaymentMode,
     downPaymentValue,
+    otherMonthlyPayments,
+    pdnThresholdPercent,
     propertyPrice,
     termUnit,
     termValue,
@@ -410,8 +453,29 @@ export default function MortgageCalculator() {
     [currencySymbol],
   )
 
+  const requiredIncome = useMemo(() => {
+    if (!calcInput) return Number.NaN
+    const paymentForCalc =
+      calcInput.paymentType === 'annuity' ? calculated.annuity.monthlyPayment : diffFirst
+    return calcRequiredIncome(
+      paymentForCalc,
+      calcInput.otherMonthlyPayments,
+      calcInput.pdnThresholdPercent,
+    )
+  }, [
+    calcInput,
+    calculated.annuity.monthlyPayment,
+    diffFirst,
+  ])
+
+  const requiredIncomeHint = useMemo(() => {
+    if (!calcInput) return ''
+    return `(при ПДН ≤ ${formatPercent(calcInput.pdnThresholdPercent)} и др. платежах ${formatCur(calcInput.otherMonthlyPayments)})`
+  }, [calcInput, formatCur])
+
   return (
     <div className="calculator">
+      <FormulasHelp />
       <section className="panel">
         <div className="panelHeader">
           <div className="panelTitle">Параметры</div>
@@ -572,6 +636,70 @@ export default function MortgageCalculator() {
             )}
           </label>
 
+          <label className="field">
+            <div className="fieldLabel">Порог ПДН, %</div>
+            <input
+              className="fieldInput"
+              inputMode="decimal"
+              type="text"
+              value={pdnThresholdText}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const nextText = e.target.value
+                setPdnThresholdText(nextText)
+                setPdnThresholdPercent(parseLocalizedNumber(nextText))
+                setIsDirty(true)
+                setIsPrepayTermDirty(true)
+                setIsPrepayPayDirty(true)
+              }}
+              onFocus={() => {
+                if (Number.isFinite(pdnThresholdPercent)) {
+                  setPdnThresholdText(String(pdnThresholdPercent))
+                }
+              }}
+              onBlur={() => {
+                if (Number.isFinite(pdnThresholdPercent)) {
+                  setPdnThresholdText(formatPercent(pdnThresholdPercent))
+                } else {
+                  setPdnThresholdText('')
+                }
+              }}
+            />
+            {errors.pdnThresholdPercent && (
+              <div className="fieldError">{errors.pdnThresholdPercent}</div>
+            )}
+          </label>
+
+          <label className="field">
+            <div className="fieldLabel">{`Другие ежемесячные платежи, ${currencySymbol}`}</div>
+            <input
+              className="fieldInput"
+              inputMode="numeric"
+              type="text"
+              ref={otherMonthlyPaymentsRef}
+              value={formatDigits(otherMonthlyPaymentsDigits)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const input = e.target
+                const cursor = input.selectionStart ?? input.value.length
+                const digitsBeforeCursor = digitsOnly(input.value.slice(0, cursor)).length
+                const nextDigits = digitsOnly(input.value)
+
+                setOtherMonthlyPaymentsDigits(nextDigits)
+                setIsDirty(true)
+                setIsPrepayTermDirty(true)
+                setIsPrepayPayDirty(true)
+
+                requestAnimationFrame(() => {
+                  const el = otherMonthlyPaymentsRef.current
+                  if (!el) return
+                  setCursorByDigits(el, Math.min(digitsBeforeCursor, nextDigits.length))
+                })
+              }}
+            />
+            {errors.otherMonthlyPayments && (
+              <div className="fieldError">{errors.otherMonthlyPayments}</div>
+            )}
+          </label>
+
           <div className="field">
             <div className="fieldLabel">Срок кредита</div>
             <div className="segmented">
@@ -689,6 +817,8 @@ export default function MortgageCalculator() {
                     downPaymentMode,
                     downPaymentValue,
                     annualRatePercent,
+                    pdnThresholdPercent,
+                    otherMonthlyPayments,
                     termValue,
                     termUnit,
                     paymentType,
@@ -731,10 +861,19 @@ export default function MortgageCalculator() {
             ) : calcInput.paymentType === 'annuity' ? (
               <div className="resultCard">
                 <div className="resultTitle">Аннуитет</div>
-                <div className="primaryPayment">
-                  <div className="primaryPaymentLabel">Ежемесячный платёж</div>
-                  <div className="primaryPaymentValue">
-                    {formatCur(calculated.annuity.monthlyPayment)}
+                <div className="paymentIncomeGrid">
+                  <div className="primaryPayment">
+                    <div className="primaryPaymentLabel">Ежемесячный платёж</div>
+                    <div className="primaryPaymentValue">
+                      {formatCur(calculated.annuity.monthlyPayment)}
+                    </div>
+                  </div>
+                  <div className="primaryPayment">
+                    <div className="primaryPaymentLabel">Необходимый доход</div>
+                    <div className="primaryPaymentValue">
+                      {Number.isFinite(requiredIncome) ? formatCur(requiredIncome) : '—'}
+                    </div>
+                    <div className="primaryPaymentSub">{requiredIncomeHint}</div>
                   </div>
                 </div>
                 <div className="resultRow">
@@ -757,9 +896,18 @@ export default function MortgageCalculator() {
             ) : (
               <div className="resultCard">
                 <div className="resultTitle">Дифференцированный</div>
-                <div className="primaryPayment">
-                  <div className="primaryPaymentLabel">Платёж в 1-м месяце</div>
-                  <div className="primaryPaymentValue">{formatCur(diffFirst)}</div>
+                <div className="paymentIncomeGrid">
+                  <div className="primaryPayment">
+                    <div className="primaryPaymentLabel">Платёж в 1-м месяце</div>
+                    <div className="primaryPaymentValue">{formatCur(diffFirst)}</div>
+                  </div>
+                  <div className="primaryPayment">
+                    <div className="primaryPaymentLabel">Необходимый доход</div>
+                    <div className="primaryPaymentValue">
+                      {Number.isFinite(requiredIncome) ? formatCur(requiredIncome) : '—'}
+                    </div>
+                    <div className="primaryPaymentSub">{requiredIncomeHint}</div>
+                  </div>
                 </div>
                 <div className="resultRow">
                   <span>Платёж в последний месяц</span>
@@ -846,6 +994,8 @@ export default function MortgageCalculator() {
               downPaymentMode,
               downPaymentValue,
               annualRatePercent,
+              pdnThresholdPercent,
+              otherMonthlyPayments,
               termValue,
               termUnit,
               paymentType,
@@ -871,6 +1021,8 @@ export default function MortgageCalculator() {
               downPaymentMode,
               downPaymentValue,
               annualRatePercent,
+              pdnThresholdPercent,
+              otherMonthlyPayments,
               termValue,
               termUnit,
               paymentType,
@@ -898,6 +1050,8 @@ type PrepaymentTermTabProps = {
     downPaymentMode: DownPaymentMode
     downPaymentValue: number
     annualRatePercent: number
+    pdnThresholdPercent: number
+    otherMonthlyPayments: number
     termValue: number
     termUnit: TermUnit
     paymentType: PaymentType
@@ -1014,6 +1168,16 @@ function PrepaymentTermTab({
       calcInput.propertyPrice,
       downPaymentAmount,
     )
+    const i = calcMonthlyRate(calcInput.annualRatePercent)
+    const incomePayment =
+      calcInput.paymentType === 'annuity'
+        ? calcAnnuityMonthlyPayment(principal, calcInput.annualRatePercent, months)
+        : principal / Math.max(1, months) + principal * i
+    const requiredIncome = calcRequiredIncome(
+      incomePayment,
+      calcInput.otherMonthlyPayments,
+      calcInput.pdnThresholdPercent,
+    )
 
     if (calcInput.paymentType === 'annuity') {
       const base = simulateEarlyRepaymentAnnuity(
@@ -1028,7 +1192,7 @@ function PrepaymentTermTab({
         months,
         calcInput.extraPayment,
       )
-      return { months, principal, base, withExtra }
+      return { months, principal, base, withExtra, incomePayment, requiredIncome }
     }
 
     const base = simulateEarlyRepaymentDifferentiated(
@@ -1043,8 +1207,13 @@ function PrepaymentTermTab({
       months,
       calcInput.extraPayment,
     )
-    return { months, principal, base, withExtra }
+    return { months, principal, base, withExtra, incomePayment, requiredIncome }
   }, [calcInput])
+
+  const requiredIncomeHint = useMemo(() => {
+    if (!calcInput) return ''
+    return `(при ПДН ≤ ${formatPercent(calcInput.pdnThresholdPercent)} и др. платежах ${formatCur(calcInput.otherMonthlyPayments)})`
+  }, [calcInput, formatCur])
 
   const baseTotals = useMemo(() => {
     if (!computed) return null
@@ -1103,23 +1272,37 @@ function PrepaymentTermTab({
         </div>
 
         <div className="prepayTopGrid">
-          <div className="prepayBase">
-            <div className="prepayBaseTitle">Ваш текущий платёж</div>
-            {!basePaymentInfo ? (
-              <div className="prepayBaseValue">—</div>
-            ) : basePaymentInfo.type === 'annuity' ? (
-              <>
-                <div className="prepayBaseValue">{formatCur(basePaymentInfo.monthlyPayment)}</div>
-                <div className="prepayBaseHint">Аннуитетный платёж (одинаков каждый месяц)</div>
-              </>
-            ) : (
-              <>
-                <div className="prepayBaseValue">
-                  {formatCur(basePaymentInfo.first)} → {formatCur(basePaymentInfo.last)}
-                </div>
-                <div className="prepayBaseHint">1-й месяц → последний (дифференцированный)</div>
-              </>
-            )}
+          <div className="prepayLeft">
+            <div className="prepayBase">
+              <div className="prepayBaseTitle">Ваш текущий платёж</div>
+              {!basePaymentInfo ? (
+                <div className="prepayBaseValue">—</div>
+              ) : basePaymentInfo.type === 'annuity' ? (
+                <>
+                  <div className="prepayBaseValue">
+                    {formatCur(basePaymentInfo.monthlyPayment)}
+                  </div>
+                  <div className="prepayBaseHint">Аннуитетный платёж (одинаков каждый месяц)</div>
+                </>
+              ) : (
+                <>
+                  <div className="prepayBaseValue">
+                    {formatCur(basePaymentInfo.first)} → {formatCur(basePaymentInfo.last)}
+                  </div>
+                  <div className="prepayBaseHint">1-й месяц → последний (дифференцированный)</div>
+                </>
+              )}
+            </div>
+
+            <div className="prepayBase prepayIncome">
+              <div className="prepayBaseTitle">Необходимый доход</div>
+              <div className="prepayBaseValue">
+                {calcInput && computed && Number.isFinite(computed.requiredIncome)
+                  ? formatCur(computed.requiredIncome)
+                  : '—'}
+              </div>
+              <div className="prepayBaseHint">{requiredIncomeHint}</div>
+            </div>
           </div>
 
           <div className="field">
@@ -1287,6 +1470,8 @@ type PrepaymentPayTabProps = {
     downPaymentMode: DownPaymentMode
     downPaymentValue: number
     annualRatePercent: number
+    pdnThresholdPercent: number
+    otherMonthlyPayments: number
     termValue: number
     termUnit: TermUnit
     paymentType: PaymentType
@@ -1338,6 +1523,16 @@ function PrepaymentPayTab({
       calcInput.propertyPrice,
       downPaymentAmount,
     )
+    const i = calcMonthlyRate(calcInput.annualRatePercent)
+    const incomePayment =
+      calcInput.paymentType === 'annuity'
+        ? calcAnnuityMonthlyPayment(principal, calcInput.annualRatePercent, months)
+        : principal / Math.max(1, months) + principal * i
+    const requiredIncome = calcRequiredIncome(
+      incomePayment,
+      calcInput.otherMonthlyPayments,
+      calcInput.pdnThresholdPercent,
+    )
 
     const base = simulatePayReduction(
       calcInput.paymentType,
@@ -1353,8 +1548,13 @@ function PrepaymentPayTab({
       months,
       calcInput.extraPayment,
     )
-    return { months, principal, base, withExtra }
+    return { months, principal, base, withExtra, incomePayment, requiredIncome }
   }, [calcInput])
+
+  const requiredIncomeHint = useMemo(() => {
+    if (!calcInput) return ''
+    return `(при ПДН ≤ ${formatPercent(calcInput.pdnThresholdPercent)} и др. платежах ${formatCur(calcInput.otherMonthlyPayments)})`
+  }, [calcInput, formatCur])
 
   const savings = useMemo(() => {
     if (!computed) return 0
@@ -1404,23 +1604,37 @@ function PrepaymentPayTab({
         </div>
 
         <div className="prepayTopGrid">
-          <div className="prepayBase">
-            <div className="prepayBaseTitle">Ваш текущий платёж</div>
-            {!basePaymentInfo ? (
-              <div className="prepayBaseValue">—</div>
-            ) : basePaymentInfo.type === 'annuity' ? (
-              <>
-                <div className="prepayBaseValue">{formatCur(basePaymentInfo.monthlyPayment)}</div>
-                <div className="prepayBaseHint">Аннуитетный платёж (одинаков каждый месяц)</div>
-              </>
-            ) : (
-              <>
-                <div className="prepayBaseValue">
-                  {formatCur(basePaymentInfo.first)} → {formatCur(basePaymentInfo.last)}
-                </div>
-                <div className="prepayBaseHint">1-й месяц → последний (дифференцированный)</div>
-              </>
-            )}
+          <div className="prepayLeft">
+            <div className="prepayBase">
+              <div className="prepayBaseTitle">Ваш текущий платёж</div>
+              {!basePaymentInfo ? (
+                <div className="prepayBaseValue">—</div>
+              ) : basePaymentInfo.type === 'annuity' ? (
+                <>
+                  <div className="prepayBaseValue">
+                    {formatCur(basePaymentInfo.monthlyPayment)}
+                  </div>
+                  <div className="prepayBaseHint">Аннуитетный платёж (одинаков каждый месяц)</div>
+                </>
+              ) : (
+                <>
+                  <div className="prepayBaseValue">
+                    {formatCur(basePaymentInfo.first)} → {formatCur(basePaymentInfo.last)}
+                  </div>
+                  <div className="prepayBaseHint">1-й месяц → последний (дифференцированный)</div>
+                </>
+              )}
+            </div>
+
+            <div className="prepayBase prepayIncome">
+              <div className="prepayBaseTitle">Необходимый доход</div>
+              <div className="prepayBaseValue">
+                {calcInput && computed && Number.isFinite(computed.requiredIncome)
+                  ? formatCur(computed.requiredIncome)
+                  : '—'}
+              </div>
+              <div className="prepayBaseHint">{requiredIncomeHint}</div>
+            </div>
           </div>
 
           <div className="field">
