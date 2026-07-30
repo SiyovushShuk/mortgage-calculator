@@ -203,13 +203,16 @@ export function simulateEarlyRepaymentAnnuity(
   while (balance > 0 && month < 5000) {
     month += 1
     const interestPart = balance * i
-    const principalPart = Math.max(0, baseMonthlyPayment - interestPart)
+    const principalPart = Math.min(
+      Math.max(0, baseMonthlyPayment - interestPart),
+      balance,
+    )
     const extraPaymentPart = Math.max(
       0,
       Math.min(safeExtra, Math.max(0, balance - principalPart)),
     )
 
-    const payment = baseMonthlyPayment + extraPaymentPart
+    const payment = principalPart + interestPart + extraPaymentPart
     balance = Math.max(0, balance - principalPart - extraPaymentPart)
 
     schedule.push({
@@ -357,9 +360,17 @@ export function simulatePayReductionAnnuity(
       continue
     }
 
-    const payment = calcAnnuityMonthlyPayment(balance, annualRatePercent, monthsLeft)
+    const theoreticalPayment = calcAnnuityMonthlyPayment(
+      balance,
+      annualRatePercent,
+      monthsLeft,
+    )
     const interestPart = balance * i
-    const principalPart = Math.max(0, payment - interestPart)
+    const principalPart = Math.min(
+      Math.max(0, theoreticalPayment - interestPart),
+      balance,
+    )
+    const payment = principalPart + interestPart
     const extraPaymentPart = Math.max(
       0,
       Math.min(safeExtra, Math.max(0, balance - principalPart)),
@@ -423,7 +434,7 @@ export function simulatePayReductionDifferentiated(
       continue
     }
 
-    const principalPart = balance / monthsLeft
+    const principalPart = Math.min(balance / monthsLeft, balance)
     const interestPart = balance * i
     const payment = principalPart + interestPart
     const extraPaymentPart = Math.max(

@@ -977,6 +977,18 @@ function PrepaymentTermTab({
     [currencySymbol],
   )
 
+  const aggregateSchedule = useMemo(() => {
+    return (rows: EarlyRepaymentRow[]) => {
+      let totalPayment = 0
+      let totalInterest = 0
+      for (const r of rows) {
+        totalPayment += r.payment
+        totalInterest += r.interestPart
+      }
+      return { totalPayment, totalInterest, monthsActual: rows.length }
+    }
+  }, [])
+
   const extraPayment = extraPaymentDigits === '' ? 0 : Number(extraPaymentDigits)
 
   const computed = useMemo(() => {
@@ -1026,15 +1038,25 @@ function PrepaymentTermTab({
     return { months, principal, base, withExtra }
   }, [calcInput])
 
+  const baseTotals = useMemo(() => {
+    if (!computed) return null
+    return aggregateSchedule(computed.base.schedule as EarlyRepaymentRow[])
+  }, [aggregateSchedule, computed])
+
+  const withExtraTotals = useMemo(() => {
+    if (!computed) return null
+    return aggregateSchedule(computed.withExtra.schedule as EarlyRepaymentRow[])
+  }, [aggregateSchedule, computed])
+
   const savings = useMemo(() => {
-    if (!computed) return 0
-    return computed.base.totalInterest - computed.withExtra.totalInterest
-  }, [computed])
+    if (!baseTotals || !withExtraTotals) return 0
+    return baseTotals.totalInterest - withExtraTotals.totalInterest
+  }, [baseTotals, withExtraTotals])
 
   const termReductionMonths = useMemo(() => {
-    if (!computed) return 0
-    return Math.max(0, computed.months - computed.withExtra.monthsActual)
-  }, [computed])
+    if (!computed || !withExtraTotals) return 0
+    return Math.max(0, computed.months - withExtraTotals.monthsActual)
+  }, [computed, withExtraTotals])
 
   const balanceSeries = useMemo(() => {
     if (!computed || !calcInput) return null
@@ -1061,7 +1083,7 @@ function PrepaymentTermTab({
     return computed.withExtra.schedule as EarlyRepaymentRow[]
   }, [computed])
 
-  const closesInFirstMonth = computed?.withExtra.monthsActual === 1
+  const closesInFirstMonth = withExtraTotals?.monthsActual === 1
 
   return (
     <>
@@ -1147,7 +1169,7 @@ function PrepaymentTermTab({
             Задайте доплату и нажмите «Посчитать», чтобы увидеть эффект.
           </div>
         </section>
-      ) : !computed ? null : (
+      ) : !computed || !baseTotals || !withExtraTotals ? null : (
         <>
           <section className="panel">
             <div className="panelTitle">Было / Стало</div>
@@ -1157,17 +1179,17 @@ function PrepaymentTermTab({
                 {
                   label: 'Срок кредита',
                   base: `${computed.months} мес`,
-                  changed: `${computed.withExtra.monthsActual} мес`,
+                  changed: `${withExtraTotals.monthsActual} мес`,
                 },
                 {
                   label: 'Переплата по процентам',
-                  base: formatCur(computed.base.totalInterest),
-                  changed: formatCur(computed.withExtra.totalInterest),
+                  base: formatCur(baseTotals.totalInterest),
+                  changed: formatCur(withExtraTotals.totalInterest),
                 },
                 {
                   label: 'Общая сумма выплат',
-                  base: formatCur(computed.base.totalPayment),
-                  changed: formatCur(computed.withExtra.totalPayment),
+                  base: formatCur(baseTotals.totalPayment),
+                  changed: formatCur(withExtraTotals.totalPayment),
                 },
               ]}
             />
@@ -1187,8 +1209,8 @@ function PrepaymentTermTab({
                 <div className="megaLabel">Вы сэкономите на процентах</div>
                 <div className="megaValue">{formatCur(savings)}</div>
                 <div className="megaSub">
-                  ({formatCur(computed.base.totalInterest)} →{' '}
-                  {formatCur(computed.withExtra.totalInterest)})
+                  ({formatCur(baseTotals.totalInterest)} →{' '}
+                  {formatCur(withExtraTotals.totalInterest)})
                 </div>
               </div>
             </div>
